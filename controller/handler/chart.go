@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"log"
 	"math"
 	"net/http"
@@ -116,4 +117,42 @@ func ResponseTimeChart(writer http.ResponseWriter, r *http.Request) {
 		log.Println("[handler][ResponseTimeChart] Failed to render response time chart:", err.Error())
 		return
 	}
+}
+
+func ResponseTime(writer http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	duration := vars["duration"]
+	var from time.Time
+	switch duration {
+	case "7d":
+		from = time.Now().Truncate(time.Hour).Add(-24 * 7 * time.Hour)
+	case "24h":
+		from = time.Now().Truncate(time.Hour).Add(-24 * time.Hour)
+	default:
+		http.Error(writer, "Durations supported: 7d, 24h", http.StatusBadRequest)
+		return
+	}
+	hourlyAverageResponseTime, err := store.Get().GetHourlyAverageResponseTimeByKey(vars["key"], from, time.Now())
+	if err != nil {
+		if err == common.ErrEndpointNotFound {
+			http.Error(writer, err.Error(), http.StatusNotFound)
+		} else if err == common.ErrInvalidTimeRange {
+			http.Error(writer, err.Error(), http.StatusBadRequest)
+		} else {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	if len(hourlyAverageResponseTime) == 0 {
+		http.Error(writer, "", http.StatusNoContent)
+		return
+	}
+	data, err := json.Marshal(hourlyAverageResponseTime)
+	if err != nil {
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writer.Header().Add("Content-Type", "application/json")
+	writer.WriteHeader(http.StatusOK)
+	_, _ = writer.Write(data)
 }

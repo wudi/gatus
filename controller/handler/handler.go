@@ -23,6 +23,7 @@ func CreateRouter(staticFolder string, securityConfig *security.Config, uiConfig
 	router.HandleFunc("/api/v1/endpoints/{key}/uptimes/{duration}/badge.svg", UptimeBadge).Methods("GET")
 	router.HandleFunc("/api/v1/endpoints/{key}/response-times/{duration}/badge.svg", ResponseTimeBadge).Methods("GET")
 	router.HandleFunc("/api/v1/endpoints/{key}/response-times/{duration}/chart.svg", ResponseTimeChart).Methods("GET")
+	router.HandleFunc("/api/v1/endpoints/{key}/response-times/{duration}", ResponseTime).Methods("GET")
 	// XXX: Remove the lines between this and the next XXX comment in v4.0.0
 	router.HandleFunc("/api/v1/services/statuses", secureIfNecessary(securityConfig, EndpointStatuses)).Methods("GET") // No GzipHandler for this one, because we cache the content as Gzipped already
 	router.HandleFunc("/api/v1/services/{key}/statuses", secureIfNecessary(securityConfig, GzipHandlerFunc(EndpointStatus))).Methods("GET")

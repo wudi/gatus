@@ -37,6 +37,9 @@
     <div v-if="endpointStatus && endpointStatus.key" class="mt-12">
       <h1 class="text-xl xl:text-3xl font-mono text-gray-400">RESPONSE TIME</h1>
       <hr/>
+
+      <LineChart :chartData="chartData" :options="chartOptions" />
+
       <img :src="generateResponseTimeChartImageURL()" alt="response time chart" class="mt-6" />
       <div class="flex space-x-4 text-center text-2xl mt-6 relative bottom-2 mb-10">
         <div class="flex-1">
@@ -92,17 +95,24 @@ import {SERVER_URL} from "@/main.js";
 import {helper} from "@/mixins/helper.js";
 import Pagination from "@/components/Pagination";
 
+import { LineChart } from 'vue-chart-3';
+import { Chart, CategoryScale, LineController, LinearScale, LineElement, PointElement, TimeScale, Title, Tooltip} from 'chart.js';
+Chart.register(LineController, CategoryScale, LinearScale, LineElement, PointElement, TimeScale, Title, Tooltip);
+
+
 export default {
   name: 'Details',
   components: {
     Pagination,
     Endpoint,
     Settings,
+    LineChart,
   },
   emits: ['showTooltip'],
   mixins: [helper],
   methods: {
     fetchData() {
+      // XXX: This should probably be called every 15 minutes or so
       //console.log("[Details][fetchData] Fetching data");
       fetch(`${this.serverUrl}/api/v1/endpoints/${this.$route.params.key}/statuses?page=${this.currentPage}`)
           .then(response => response.json())
@@ -140,7 +150,38 @@ export default {
               }
               this.events = events;
             }
+            this.fetchUptimeChartData();
           });
+    },
+    fetchUptimeChartData() {
+      fetch(`${this.serverUrl}/api/v1/endpoints/${this.$route.params.key}/response-times/24h`).then(response => {
+        response.json().then(data => {
+          let chart = {
+            labels: [],
+            datasets: [
+              {
+                label: 'Average response time (ms)',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+              },
+            ]
+          };
+          let latest = null;
+          for (const [key] of Object.entries(data)) {
+              latest = key;
+          }
+          for (let i = 24; i >= 0; i--) {
+            let date = new Date((latest*1000)-(i*3600000));
+            chart.labels.push(date.toLocaleTimeString().replaceAll(":00", ""));
+            if (data[date.getTime()/1000]) {
+              chart.datasets[0].data.push(data[date.getTime()/1000]);
+            } else {
+              chart.datasets[0].data.push(0);
+            }
+          }
+          this.chartData = chart;
+        })
+      });
     },
     generateUptimeBadgeImageURL(duration) {
       return `${this.serverUrl}/api/v1/endpoints/${this.endpointStatus.key}/uptimes/${duration}/badge.svg`;
@@ -182,8 +223,18 @@ export default {
       serverUrl: SERVER_URL === '.' ? '..' : SERVER_URL,
       currentPage: 1,
       showAverageResponseTime: true,
-      chartLabels: [],
-      chartValues: [],
+      chartData: {labels: [], datasets: [{data: []}]},
+      chartOptions: {
+        scales: {
+          y: {
+            min: 0,
+            title: {
+              display: true,
+              text: 'Average response time (ms)'
+            }
+          }
+        }
+      }
     }
   },
   created() {
